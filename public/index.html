@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>プリスタくん電卓</title>
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500&display=swap" rel="stylesheet">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#F0D98A">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .catch(console.error);
+}
+</script>
+<style>
+  body {
+    background: #FFF8C6;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .calc {
+    background: #fff;
+    border: 4px solid #F0D98A;
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+    position: relative;
+    margin: 80px auto 0;
+    max-width: 400px;
+    width: 90%;
+  }
+  
+  .display-container {
+    width: 100%;
+    margin-bottom: 16px;
+    background: #f9f9f9;
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+  }
+  
+  .expression {
+    width: 100%;
+    height: 24px;
+    font-size: 16px;
+    text-align: right;
+    color: #666;
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  #display {
+    width: 100%;
+    height: 40px;
+    font-size: 32px;
+    text-align: right;
+    border: none;
+    background: transparent;
+  }
+  
+  .keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-gap: 12px;
+    margin-top: 16px;
+  }
+  
+  button {
+    height: 70px;
+    border-radius: 16px;
+    border: none;
+    font-size: 28px;
+    font-weight: bold;
+    background: white;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  
+  button:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  
+  .op {
+    background: #FFCD4B;
+  }
+  
+  .eq {
+    background: #FFA726;
+  }
+  
+  .bubble {
+    display: none; /* 吹き出しを非表示にする */
+  }
+  
+  .bubble::after {
+    content: '';
+    position: absolute;
+    left: -20px;
+    bottom: 20px;
+    border: 10px solid transparent;
+    border-right-color: #fff;
+  }
+  
+  .prisuta {
+    position: absolute;
+    left: -30px;
+    top: -30px;
+    width: 140px; /* サイズを小さく */
+    z-index: 5;
+  }
+  
+  .error {
+    color: red;
+  }
+  
+  @media(max-width: 480px) {
+    body {
+      padding: 10px;
+    }
+    .calc {
+      margin-top: 50px;
+      padding: 20px;
+    }
+    button {
+      height: 65px;
+      font-size: 24px;
+    }
+    .prisuta {
+      width: 120px;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="calc">
+    <div class="display-container">
+      <div id="expression" class="expression">0</div>
+      <input id="display" type="text" value="0" readonly />
+    </div>
+    <div class="keys">
+      <!-- 数字 & 演算子ボタンはJSで生成 -->
+    </div>
+    <div class="bubble" id="bubble">0</div>
+    <img src="assets/prisuta.png" alt="プリスタくん" class="prisuta" />
+  </div>
+
+<script>
+  // DOM要素の取得
+  const disp = document.getElementById('display');
+  const exprDisplay = document.getElementById('expression');
+  const bubble = document.getElementById('bubble');
+  const grid = document.querySelector('.keys');
+  
+  // ボタンの配置（0-9, +, −, ×, ÷, C, =, .）
+  const keys = [
+    '7', '8', '9', '÷',
+    '4', '5', '6', '×',
+    '1', '2', '3', '−',
+    '0', '.', 'C', '+'
+  ];
+  const lastRow = ['='];
+  
+  // ボタンの生成
+  keys.forEach(k => {
+    const b = document.createElement('button');
+    b.textContent = k;
+    if(['÷', '×', '−', '+'].includes(k)) b.classList.add('op');
+    grid.appendChild(b);
+  });
+  
+  // =ボタンは幅広にする
+  const eqButton = document.createElement('button');
+  eqButton.textContent = '=';
+  eqButton.classList.add('eq');
+  eqButton.style.gridColumn = 'span 4'; // 4列分の幅
+  grid.appendChild(eqButton);
+  
+  // 計算用の変数
+  let currentExpression = '0';
+  let lastResult = null;
+  let lastExpression = null;
+  let newInput = true;
+  
+  // 四則演算の実装（eval()不使用）
+  function calculateExpression(expr) {
+    // 演算子を処理しやすい形に変換
+    expr = expr.replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-');
+    
+    try {
+      // 数字と演算子を分解
+      const tokens = expr.match(/([0-9]+\.?[0-9]*|[\+\-\*\/])/g) || [];
+      
+      if (tokens.length === 0) return 0;
+      
+      let result = parseFloat(tokens[0]);
+      let currentOp = null;
+      
+      for (let i = 1; i < tokens.length; i++) {
+        const token = tokens[i];
+        
+        if (['+', '-', '*', '/'].includes(token)) {
+          currentOp = token;
+        } else if (currentOp) {
+          const num = parseFloat(token);
+          
+          switch(currentOp) {
+            case '+': result += num; break;
+            case '-': result -= num; break;
+            case '*': result *= num; break;
+            case '/':
+              if (num === 0) return 'ERROR';
+              result /= num;
+              break;
+          }
+          
+          currentOp = null;
+        }
+      }
+      
+      // 小数点以下が0なら整数として表示
+      if (result % 1 === 0) {
+        return result;
+      }
+      
+      // 小数点以下が長すぎる場合は適当に丸める
+      return Math.round(result * 1000000) / 1000000;
+    } catch (e) {
+      return 'ERROR';
+    }
+  }
+  
+  // 表示の更新
+  function updateDisplay() {
+    // 式と結果を別々に表示
+    if (newInput && lastResult !== null) {
+      // 計算後の状態
+      exprDisplay.textContent = lastExpression || '0';
+      disp.value = currentExpression;
+    } else {
+      // 入力中の状態
+      exprDisplay.textContent = currentExpression;
+      disp.value = currentExpression;
+    }
+    
+    // エラー表示の場合は赤文字に
+    if(currentExpression === 'ERROR') {
+      disp.classList.add('error');
+    } else {
+      disp.classList.remove('error');
+    }
+  }
+  
+  // 数字ボタンのハンドラ
+  function inputDigit(digit) {
+    if (newInput) {
+      currentExpression = digit;
+      newInput = false;
+    } else {
+      currentExpression = currentExpression === '0' ? digit : currentExpression + digit;
+    }
+  }
+  
+  // 小数点ボタンのハンドラ
+  function inputDecimal() {
+    // 直前の文字が演算子なら「0.」を追加
+    if (['+', '−', '×', '÷'].includes(currentExpression.slice(-1))) {
+      currentExpression += '0';
+    }
+    
+    // 最後の数字に小数点がない場合のみ追加
+    const numbers = currentExpression.split(/[+−×÷]/);
+    const lastNumber = numbers[numbers.length - 1];
+    
+    if (!lastNumber.includes('.')) {
+      currentExpression += '.';
+    }
+  }
+  
+  // 演算子ボタンのハンドラ
+  function handleOperator(op) {
+    // 最後が演算子なら置き換える
+    if (['+', '−', '×', '÷'].includes(currentExpression.slice(-1))) {
+      currentExpression = currentExpression.slice(0, -1) + op;
+    } else {
+      // 通常は式に追加
+      currentExpression += op;
+    }
+    newInput = false;
+  }
+  
+  // クリアボタンのハンドラ
+  function resetCalculator() {
+    currentExpression = '0';
+    lastResult = null;
+    newInput = true;
+  }
+  
+  // ボタンクリックイベント
+  grid.addEventListener('click', e => {
+    if(!e.target.matches('button')) return;
+    
+    const value = e.target.textContent;
+    
+    if('0123456789'.includes(value)) {
+      inputDigit(value);
+      updateDisplay();
+    } else if(value === '.') {
+      inputDecimal();
+      updateDisplay();
+    } else if('÷×−+'.includes(value)) {
+      handleOperator(value);
+      updateDisplay();
+    } else if(value === '=') {
+      // 計算式を保存
+      lastExpression = currentExpression;
+      // 計算実行
+      const result = calculateExpression(currentExpression);
+      // 結果を表示
+      lastResult = result;
+      currentExpression = String(result);
+      newInput = true;
+      updateDisplay();
+    } else if(value === 'C') {
+      resetCalculator();
+      updateDisplay();
+    }
+  });
+  
+  // キーボード入力対応
+  document.addEventListener('keydown', e => {
+    if('0123456789'.includes(e.key)) {
+      inputDigit(e.key);
+      updateDisplay();
+    } else if(e.key === '.') {
+      inputDecimal();
+      updateDisplay();
+    } else if(e.key === '+') {
+      handleOperator('+');
+      updateDisplay();
+    } else if(e.key === '-') {
+      handleOperator('−');
+      updateDisplay();
+    } else if(e.key === '*') {
+      handleOperator('×');
+      updateDisplay();
+    } else if(e.key === '/') {
+      e.preventDefault(); // ブラウザの検索を防止
+      handleOperator('÷');
+      updateDisplay();
+    } else if(e.key === 'Enter' || e.key === '=') {
+      // 計算式を保存
+      lastExpression = currentExpression;
+      // 計算実行
+      const result = calculateExpression(currentExpression);
+      // 結果を表示
+      lastResult = result;
+      currentExpression = String(result);
+      newInput = true;
+      updateDisplay();
+    } else if(e.key === 'Escape' || e.key === 'c' || e.key === 'C') {
+      resetCalculator();
+      updateDisplay();
+    }
+  });
+  
+  // 初期表示
+  updateDisplay();
+</script>
+</body>
+</html>
