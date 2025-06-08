@@ -198,9 +198,13 @@ if ('serviceWorker' in navigator) {
     // 演算子を処理しやすい形に変換
     expr = expr.replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-');
     
+    console.log('計算式:', expr); // デバッグ用
+    
     try {
       // 数字と演算子を分解
       const tokens = expr.match(/([0-9]+\.?[0-9]*|[\+\-\*\/])/g) || [];
+      
+      console.log('トークン:', tokens); // デバッグ用
       
       if (tokens.length === 0) return 0;
       
@@ -219,11 +223,16 @@ if ('serviceWorker' in navigator) {
       while (i < tokens.length) {
         const token = tokens[i];
         
+        console.log('現在のトークン:', token, '位置:', i); // デバッグ用
+        console.log('現在の処理済みトークン:', [...processedTokens]); // デバッグ用
+        
         if (token === '*' || token === '/') {
           // 演算子の前の数値
           const prevNum = processedTokens.pop();
           // 演算子の後の数値
           const nextNum = parseFloat(tokens[i + 1] || 0);
+          
+          console.log('掛け算/割り算:', prevNum, token, nextNum); // デバッグ用
           
           if (token === '*') {
             processedTokens.push(prevNum * nextNum);
@@ -231,6 +240,8 @@ if ('serviceWorker' in navigator) {
             if (nextNum === 0) return 'ERROR';
             processedTokens.push(prevNum / nextNum);
           }
+          
+          console.log('計算後:', processedTokens[processedTokens.length - 1]); // デバッグ用
           
           i += 2; // 演算子と次の数値をスキップ
         } else {
@@ -244,6 +255,8 @@ if ('serviceWorker' in navigator) {
         }
       }
       
+      console.log('掛け算/割り算処理後:', processedTokens); // デバッグ用
+      
       // 次に、足し算と引き算を処理
       let result = processedTokens[0] || 0;
       
@@ -251,11 +264,15 @@ if ('serviceWorker' in navigator) {
         const operator = processedTokens[j];
         const num = processedTokens[j + 1] || 0;
         
+        console.log('足し算/引き算:', result, operator, num); // デバッグ用
+        
         if (operator === '+') {
           result += num;
         } else if (operator === '-') {
           result -= num;
         }
+        
+        console.log('計算後の結果:', result); // デバッグ用
       }
       
       // 小数点以下が0なら整数として表示
@@ -266,6 +283,7 @@ if ('serviceWorker' in navigator) {
       // 小数点以下が長すぎる場合は適当に丸める
       return Math.round(result * 1000000) / 1000000;
     } catch (e) {
+      console.error('計算エラー:', e); // デバッグ用
       return 'ERROR';
     }
   }
