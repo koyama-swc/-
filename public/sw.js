@@ -1,12 +1,11 @@
 /* プリスタ電卓 Service Worker: 静的アセットをキャッシュしてオフライン対応 */
 const CACHE_NAME = 'prisuta-calc-v1';
 const URLS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/script.js',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
+  '/-/',
+  '/-/index.html',
+  '/-/assets/prisuta.png',
+  '/-/icons/icon-192.png',
+  '/-/icons/icon-512.png',
 ];
 
 self.addEventListener('install', event => {
