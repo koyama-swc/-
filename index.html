@@ -193,6 +193,11 @@ if ('serviceWorker' in navigator) {
   let lastExpression = null;
   let newInput = true;
   
+  // 演算子かどうかを判定する関数
+  function isOperator(token) {
+    return ['+', '-', '*', '/'].includes(token);
+  }
+  
   // 四則演算の実装（eval()不使用）
   function calculateExpression(expr) {
     // 演算子を処理しやすい形に変換
@@ -286,11 +291,6 @@ if ('serviceWorker' in navigator) {
       console.error('計算エラー:', e); // デバッグ用
       return 'ERROR';
     }
-  }
-
-  // 演算子かどうかを判定する関数
-  function isOperator(token) {
-    return ['+', '-', '*', '/'].includes(token);
   }
   
   // 表示の更新
